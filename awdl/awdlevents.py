@@ -56,9 +56,10 @@ def decode(hdr, data, verbose):
         extra = " sub=%s" % AWDL_EVENT_SUB.get(sub, sub)
     if code == 75:
         # brcmf_rx_mgmt_data { u16 version; u16 chanspec; s32 rssi; u32 mactime; u32 rate; } then frame
-        ver, chspec, rssi = struct.unpack_from("<HHi", data)
+        # struct brcmf_rx_mgmt_data { __be16 version; __be16 len; __be16 chanspec; __be32 rssi; __be32 mactime; __be32 rate; }
+        ver, ln, chspec, rssi = struct.unpack_from(">HHHi", data)
         frame = data[16:]
-        extra = " chanspec=0x%04x rssi=%d frame[%d]=%s" % (chspec, rssi, len(frame), hexs(frame, 96))
+        extra = " chanspec=0x%04x rssi=%d frame[%d]=%s" % (chspec, rssi, len(frame), frame.hex())
         data = b""
     print("%s %-26s st=%d rs=%d fl=0x%x if=%d cfg=%d %s len=%d%s%s" % (
         time.strftime("%H:%M:%S"), name, status, reason, flags, ifidx, bsscfg,

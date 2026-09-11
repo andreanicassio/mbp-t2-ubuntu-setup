@@ -114,7 +114,12 @@ needs raw frames.
   (user had to plug in Ethernet). awdl-up.sh now uses Apple's sparse pattern
   [44 0 0 0 0 0 0 0 6 44 44 0 0 0 0 0]; still expect reduced throughput while AWDL is on.
   awdl-down.sh disables it.
-- No action frames received yet (no Apple device with AWDL active nearby during the test).
+- **Peer discovery works (23:50):** with an iPad (iOS, AWDL v10.0) in AirDrop "Everyone" mode next to
+  the laptop, the firmware delivered ~100 action frames in 30 s (ACTION_FRAME_RX events on awdl0,
+  MIF + PSF, on channels 44/6/40), AWDL_ROLE went master(2) -> slave(1), i.e. the firmware
+  synchronised to the iPad as master, and `awdl_advertisers` lists the iPad's AWDL MAC.
+  `awdlparse.py events.log` decodes the TLVs: hostname (<uuid>.local), version/device class,
+  sync + election params, service responses (device name, _airdrop-like services).
 
 ## Scripts
 - `sudo ./awdl-up.sh` / `sudo ./awdl-down.sh` — create/configure/enable, disable.
