@@ -104,6 +104,14 @@ if [ ! -x ~/.local/bin/toshy-services-start ]; then
   sudo rm -f /etc/sudoers.d/zz-toshy-install; rm -rf "$tmp"
 fi
 sudo usermod -aG input "$USER"
+# classify the T2 internal keyboard as Apple (not in Toshy's built-in list -> would be treated as a PC keyboard)
+[ -f "$C" ] && ! grep -q "Apple Internal Keyboard / Trackpad': 'Apple'" "$C" && python3 - <<'PY'
+import re,os
+p=os.path.expanduser('~/.config/toshy/toshy_config.py'); s=open(p).read()
+key="    'Apple Inc. Apple Internal Keyboard / Trackpad': 'Apple',"
+s=re.sub(r"(###  SLICE_MARK_START: kbtype_override  ###[^\n]*\n)(.*?)(\n###  SLICE_MARK_END: kbtype_override)", lambda m: m.group(1)+m.group(2).rstrip('\n')+"\n"+key+m.group(3), s, count=1, flags=re.S)
+open(p,'w').write(s)
+PY
 # keep Handy's ydotool virtual keyboard out of the keymapper
 C=~/.config/toshy/toshy_config.py; [ -f "$C" ] && ! grep -q "ydotoold virtual device" "$C" && sed -i "0,/ignore_devices = \[/s//ignore_devices = [\n        'ydotoold virtual device',/" "$C" || true
 
