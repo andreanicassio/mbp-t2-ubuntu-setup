@@ -13,6 +13,7 @@ reproduced from a long debugging session (see `docs/investigation-log.md`). One 
 | Internal mic dead (dictation impossible) | `t2bce_audio` capture bug; upstream fix (t2bce PR #6) not in the kernel; the upstream module can't load (core API names differ) | fix ported onto the kernel's own driver source, installed via **DKMS** (`files/usr/src/t2bce-audio-micfix-1.0`) |
 | Speakers sound terrible vs macOS | macOS runs a per-model DSP chain; Linux played raw | 16_2 FIR crossover/EQ + loudness + limiters (from lemmyg/t2-apple-audio-dsp, Asahi-derived), translated to **LADSPA** because Ubuntu's PipeWire 1.0 has no LV2 in filter-chain |
 | No True Tone; Night Light too orange | GNOME has no ambient-colour adaptation; default 2700 K | `truetone.py` user service reads the T2 ambient light sensor's colour temperature (iio `als`) and drives `night-light-temperature`; night floor 3800 K, all in `~/.config/truetone.json` |
+| Mac-style shortcuts (Cmd+C etc.) | Linux uses Ctrl; a plain modifier swap breaks terminals and Cmd+Tab | **Toshy** keymapper (app-aware: Cmd+C copies in the terminal, Ctrl+C still interrupts) + Xremap GNOME extension for focus detection; installer driven by `tools/toshy-install-driver.py` (it has an interactive captcha) |
 | Speech-to-text (Handy) on Wayland | needs a virtual keyboard and a system-level shortcut | ydotool 1.0 built from source (+ service), GNOME shortcut Ctrl+Super+H, Handy AppImage + launcher |
 
 ## Gotchas learned the hard way
@@ -21,6 +22,7 @@ reproduced from a long debugging session (see `docs/investigation-log.md`). One 
 - A PipeWire `filter-chain` module without `flags = [ nofail ]` takes the daemon down if a plugin fails to load.
 - A `pw-record` "loopback" that shows a perfect tone with exact digital silence around it is the speaker *monitor*, not the mic — target the mic node explicitly.
 - Suspend/resume re-creates the trackpad HID device; anything holding `/dev/input/eventN` must reopen.
+- Toshy's installer changes GNOME shortcuts: Super alone no longer opens the overview (Cmd+Space does; the raw binding becomes Shift+Ctrl+Space) and sets Nautilus to list view.
 - The physical click on the Force Touch pad is decided by the T2 (raw force ≈ 75–105); not fixable in software.
 
 ## Model-specific pieces

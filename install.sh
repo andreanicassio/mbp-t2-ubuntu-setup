@@ -89,10 +89,26 @@ install -D -m 0755 files/home/.local/bin/truetone.py ~/.local/bin/truetone.py
 install -D -m 0644 files/home/.config/systemd/user/truetone.service ~/.config/systemd/user/truetone.service
 systemctl --user daemon-reload; systemctl --user enable --now truetone.service
 
+say "Mac-style shortcuts: Toshy (Cmd+C/V/X/Z/A/W/Q/Tab/Space..., terminal-aware) + Xremap GNOME extension"
+E=~/.local/share/gnome-shell/extensions/xremap@k0kubun.com
+if [ ! -d "$E" ]; then
+  url=$(curl -sf "https://extensions.gnome.org/extension-info/?uuid=xremap%40k0kubun.com&shell_version=$(gnome-shell --version | grep -oE '[0-9]+' | head -1)" | python3 -c "import sys,json; print(json.load(sys.stdin).get('download_url',''))")
+  [ -n "$url" ] && { curl -sfL "https://extensions.gnome.org$url" -o /tmp/xremap-ext.zip; mkdir -p "$E"; unzip -o -q /tmp/xremap-ext.zip -d "$E"; }
+fi
+cur=$(gsettings get org.gnome.shell enabled-extensions); case "$cur" in *xremap*) ;; *) gsettings set org.gnome.shell enabled-extensions "${cur%]}, 'xremap@k0kubun.com']";; esac
+if [ ! -x ~/.local/bin/toshy-services-start ]; then
+  tmp=$(mktemp -d); git clone -q --depth 1 https://github.com/RedBearAK/toshy.git "$tmp/toshy"; cp tools/toshy-install-driver.py "$tmp/toshy/drive.py"
+  echo "Toshy's installer needs passwordless sudo for a few minutes (it prompts interactively); granting a temporary rule..."
+  sudo bash -c "printf '$USER ALL=(ALL) NOPASSWD: ALL\n' > /etc/sudoers.d/zz-toshy-install; chmod 0440 /etc/sudoers.d/zz-toshy-install"
+  (cd "$tmp/toshy" && python3 drive.py) || true
+  sudo rm -f /etc/sudoers.d/zz-toshy-install; rm -rf "$tmp"
+fi
+sudo usermod -aG input "$USER"
+
 say "done"
 cat <<'MSG'
 Next:
-  1. Log out and back in (libinput quirks + the scroll shim load with the session).
+  1. Log out and back in (libinput quirks, the scroll shim, Toshy's input-group access and its GNOME extension all load with the session).
   2. Reboot once for the microphone driver (DKMS) to be the first-loaded audio module.
   3. Open Handy once, download the Parakeet V3 model (English+Italian, auto-detect); dictate with Ctrl+Super+H.
   4. Speaker/Night Light tuning: /etc/libinput.conf (scroll-factor), ~/.config/truetone.json (night_temp, strength).
