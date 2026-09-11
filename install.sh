@@ -104,6 +104,8 @@ if [ ! -x ~/.local/bin/toshy-services-start ]; then
   sudo rm -f /etc/sudoers.d/zz-toshy-install; rm -rf "$tmp"
 fi
 sudo usermod -aG input "$USER"
+# keep Handy's ydotool virtual keyboard out of the keymapper
+C=~/.config/toshy/toshy_config.py; [ -f "$C" ] && ! grep -q "ydotoold virtual device" "$C" && sed -i "0,/ignore_devices = \[/s//ignore_devices = [\n        'ydotoold virtual device',/" "$C" || true
 
 say "done"
 cat <<'MSG'
