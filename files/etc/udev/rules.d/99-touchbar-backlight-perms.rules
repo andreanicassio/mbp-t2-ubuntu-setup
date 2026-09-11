@@ -1,0 +1,2 @@
+# Touch Bar backlight writable by the video group (used by the touchbar-follow-screen user service)
+SUBSYSTEM=="backlight", KERNEL=="appletb_backlight", RUN+="/bin/sh -c \"chgrp video /sys%p/brightness /sys%p/bl_power; chmod g+w /sys%p/brightness /sys%p/bl_power\""

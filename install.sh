@@ -116,6 +116,13 @@ PY
 # keep Handy's ydotool virtual keyboard out of the keymapper
 C=~/.config/toshy/toshy_config.py; [ -f "$C" ] && ! grep -q "ydotoold virtual device" "$C" && sed -i "0,/ignore_devices = \[/s//ignore_devices = [\n        'ydotoold virtual device',/" "$C" || true
 
+say "Touch Bar: off when the screen sleeps/locks, on when it wakes (autodim is off to avoid its flapping)"
+sudo install -D -m 0644 files/etc/udev/rules.d/99-touchbar-backlight-perms.rules /etc/udev/rules.d/99-touchbar-backlight-perms.rules
+sudo udevadm control --reload-rules; sudo udevadm trigger --subsystem-match=backlight --action=change; sudo usermod -aG video "$USER"
+install -D -m 0755 files/home/.local/bin/touchbar-follow-screen.py ~/.local/bin/touchbar-follow-screen.py
+install -D -m 0644 files/home/.config/systemd/user/touchbar-follow-screen.service ~/.config/systemd/user/touchbar-follow-screen.service
+systemctl --user daemon-reload; systemctl --user enable --now touchbar-follow-screen.service
+
 say "done"
 cat <<'MSG'
 Next:

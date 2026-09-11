@@ -1,0 +1,12 @@
+[Unit]
+Description=Touch Bar backlight follows the screen (off when the display sleeps or locks)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/touchbar-follow-screen.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target
