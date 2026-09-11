@@ -1,0 +1,11 @@
+# Keep every device behind the Apple T2 BCE virtual USB host powered.
+# When the T2 controller (05ac:8233) or its siblings runtime-suspend, HID input
+# over the BCE link stalls for 50-200ms until resume -> "cursor randomly sticks".
+# Source: t2linux/T2-Ubuntu#178 (ElvidS, 2026-06); stalls measured locally.
+ACTION=="add|change", SUBSYSTEM=="usb", ATTR{idVendor}=="05ac", ATTR{idProduct}=="8233", ATTR{power/control}="on"
+ACTION=="add|change", SUBSYSTEM=="usb", ATTR{idVendor}=="05ac", ATTR{idProduct}=="027e", ATTR{power/control}="on"
+ACTION=="add|change", SUBSYSTEM=="usb", ATTR{idVendor}=="05ac", ATTR{idProduct}=="8302", ATTR{power/control}="on"
+ACTION=="add|change", SUBSYSTEM=="usb", ATTR{idVendor}=="05ac", ATTR{idProduct}=="8102", ATTR{power/control}="on"
+ACTION=="add|change", SUBSYSTEM=="usb", ATTR{idVendor}=="05ac", ATTR{idProduct}=="8262", ATTR{power/control}="on"
+ACTION=="add|change", SUBSYSTEM=="usb", ATTR{idVendor}=="05ac", ATTR{idProduct}=="8103", ATTR{power/control}="on"
+ACTION=="add|change", SUBSYSTEM=="usb", ATTR{idVendor}=="05ac", ATTR{idProduct}=="8514", ATTR{power/control}="on"

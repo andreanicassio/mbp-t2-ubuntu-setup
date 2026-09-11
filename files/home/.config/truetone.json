@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "strength": 0.45,
+  "min_temp": 3400,
+  "neutral": 6500,
+  "night_temp": 3800,
+  "night_from": 20.0,
+  "night_to": 6.0,
+  "smoothing_s": 8.0,
+  "step": 75,
+  "interval_s": 2.0,
+  "night_enabled": true
+}

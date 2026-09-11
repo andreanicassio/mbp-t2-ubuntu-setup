@@ -1,0 +1,12 @@
+[Unit]
+Description=True-Tone-like adaptive display white point (T2 ambient light sensor -> GNOME Night Light)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/truetone.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

@@ -1,0 +1,30 @@
+# Apple T2 internal trackpad (MacBookPro16,x), driven by hid-magicmouse via t2bce_vhci.
+#
+# Without this, the device falls into the generic [Apple Touchpads USB] rule in
+# /usr/share/libinput/50-system-apple.quirks, whose thresholds are calibrated for
+# the old bcm5974 trackpads and are on the wrong scale for hid-magicmouse.
+#
+# Values below measured on this machine (31 contacts / ~4000 samples of normal use):
+#   ABS_MT_TOUCH_MAJOR  per-contact min 42..124, median 372, p99 714, max 852
+#   ABS_MT_PRESSURE     median 38, p95 158, p99 198, max 236
+#
+# Note: AttrPalmPressureThreshold is deliberately NOT set. Upstream's Magic
+# Trackpad v2 rule uses 190, but normal touches here reach 236, so that value
+# would misclassify ordinary contacts as palms.
+
+[Apple T2 Internal Trackpad]
+MatchUdevType=touchpad
+MatchBus=usb
+MatchVendor=0x05AC
+MatchProduct=0x027E
+ModelAppleTouchpad=1
+AttrSizeHint=132x82
+AttrTouchSizeRange=20:10
+AttrPalmSizeThreshold=2000
+AttrThumbSizeThreshold=1500
+# Disable libinput's touch-jump detection. In libinput 1.25 this model flag is used in exactly one place
+# (evdev-mt-touchpad.c tp_init: jump.detection_disabled = true) and nothing else. Its rel>7mm/12ms
+# acceleration rule fires on ordinary fast strokes at this pad's 123 Hz report rate (12 ms reference
+# interval assumed), discarding the first frame of a flick -> "cursor sticks then moves".
+# Kernel-side stream measured clean (no real teleports) before enabling this.
+ModelLenovoX1Gen6Touchpad=1

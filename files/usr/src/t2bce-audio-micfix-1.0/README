@@ -1,0 +1,3 @@
+t2bce_audio from linux-t2-patches 1001..1003 (kernel 7.2.4-1-t2) with deqrocks/t2bce PR #6 (135eb99,
+'fix internal mic capture') applied. Installed 2026-09-11 because the internal mic captured a flat line.
+Revert: sudo dkms remove t2bce-audio-micfix/1.0 --all && sudo depmod -a && reboot (stock in-tree module returns).

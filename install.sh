@@ -1,0 +1,100 @@
+#!/bin/bash
+# MacBook Pro (T2, MacBookPro16,2) on Ubuntu 24.04 + linux-t2: reproduce the working setup.
+# Idempotent. Run from the repo root:  bash install.sh          (asks for sudo)
+# Model-specific parts (trackpad quirk product id, speaker DSP FIRs, mic driver fix) are skipped on other models.
+set -euo pipefail
+cd "$(dirname "$(readlink -f "$0")")"
+MODEL=$(cat /sys/class/dmi/id/product_name 2>/dev/null || echo unknown)
+KREL=$(uname -r)
+say(){ printf '\n\033[1m== %s ==\033[0m\n' "$*"; }
+[[ "$KREL" == *t2* ]] || { echo "WARNING: kernel '$KREL' is not a linux-t2 kernel; T2 parts will not work."; }
+[[ "$MODEL" == "MacBookPro16,2" ]] || echo "WARNING: model is '$MODEL' (repo was built on MacBookPro16,2); model-specific parts skipped."
+IS_162=$([[ "$MODEL" == "MacBookPro16,2" ]] && echo 1 || echo 0)
+
+say "packages"
+sudo apt-get update -qq
+sudo apt-get install -y git build-essential cmake meson ninja-build pkg-config scdoc dkms "linux-headers-$KREL" \
+  libinput-tools libinput-dev libudev-dev libgtk-layer-shell0 \
+  lsp-plugins-ladspa ladspa-sdk swh-lv2 bankstown-lv2 pipewire-audio wireplumber
+
+say "trackpad: libinput quirks (needs log out/in to take effect)"
+if [[ $IS_162 == 1 ]]; then sudo install -D -m 0644 files/etc/libinput/local-overrides.quirks /etc/libinput/local-overrides.quirks; sudo libinput quirks validate; else echo "skipped (product id in the quirk is 0x027E)"; fi
+
+say "trackpad/gnome settings"
+gsettings set org.gnome.desktop.peripherals.touchpad disable-while-typing false   # Touch Bar is a keyboard device; DWT mutes the pad
+gsettings set org.gnome.desktop.peripherals.touchpad tap-and-drag true
+gsettings set org.gnome.desktop.peripherals.touchpad tap-and-drag-lock true        # physical click drops at the T2's force threshold
+gsettings set org.gnome.settings-daemon.plugins.power idle-dim false
+gsettings set org.gnome.desktop.sound allow-volume-above-100-percent true          # T2 card has no hardware gain
+
+say "Touch Bar: no auto-dim (its dim/restore path flaps)"
+sudo install -D -m 0644 files/etc/modprobe.d/hid-appletb-kbd.conf /etc/modprobe.d/hid-appletb-kbd.conf
+[ -w /sys/module/hid_appletb_kbd/parameters/autodim ] && echo N | sudo tee /sys/module/hid_appletb_kbd/parameters/autodim >/dev/null || true
+
+say "T2 link: keep devices powered (harmless; measured not to be the stall cause)"
+sudo install -D -m 0644 files/etc/udev/rules.d/99-t2-no-autosuspend.rules /etc/udev/rules.d/99-t2-no-autosuspend.rules
+sudo udevadm control --reload-rules
+
+say "two-finger scroll speed: libinput-config shim (GNOME 46 has no scroll-factor setting)"
+if ! grep -q libinput-config /etc/ld.so.preload 2>/dev/null; then
+  tmp=$(mktemp -d); git clone -q https://gitlab.com/warningnonpotablewater/libinput-config.git "$tmp/lic"; git -C "$tmp/lic" checkout -q 6f359b8
+  (cd "$tmp/lic" && meson setup build -Dshitty_sandboxing=true >/dev/null && ninja -C build >/dev/null && sudo ninja -C build install >/dev/null); sudo chmod 644 /etc/libinput-config.so; rm -rf "$tmp"
+fi
+sudo install -m 0644 files/etc/libinput.conf /etc/libinput.conf
+
+say "ydotool (Wayland typing for Handy): Ubuntu's package has no daemon -> build 1.0.x"
+if [ ! -x /usr/local/bin/ydotoold ]; then
+  tmp=$(mktemp -d); git clone -q https://github.com/ReimuNotMoe/ydotool.git "$tmp/y"; git -C "$tmp/y" checkout -q 708e96f
+  (cd "$tmp/y" && mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release >/dev/null && make -j"$(nproc)" >/dev/null && sudo make install >/dev/null); rm -rf "$tmp"
+fi
+sudo apt-get remove -y ydotool >/dev/null 2>&1 || true
+sudo install -D -m 0644 files/etc/modules-load.d/uinput.conf /etc/modules-load.d/uinput.conf; sudo modprobe uinput || true
+sudo install -D -m 0644 files/etc/systemd/system/ydotool.service /etc/systemd/system/ydotool.service
+sudo systemctl daemon-reload; sudo systemctl enable --now ydotool.service
+install -D -m 0644 files/home/.config/environment.d/ydotool.conf ~/.config/environment.d/ydotool.conf
+install -D -m 0644 files/home/.config/user-tmpfiles.d/ydotool.conf ~/.config/user-tmpfiles.d/ydotool.conf
+ln -sfn /tmp/.ydotool_socket "${XDG_RUNTIME_DIR:-/run/user/$UID}/.ydotool_socket"
+
+say "Handy (speech-to-text) AppImage + launcher + GNOME shortcut Ctrl+Super+H"
+mkdir -p ~/Applications
+[ -x ~/Applications/Handy.AppImage ] || { curl -fL -o ~/Applications/Handy.AppImage "https://github.com/cjpais/Handy/releases/download/v0.9.6/Handy_0.9.6_amd64.AppImage" && chmod +x ~/Applications/Handy.AppImage; }
+install -D -m 0644 files/home/.local/share/icons/hicolor/256x256/apps/handy.png ~/.local/share/icons/hicolor/256x256/apps/handy.png
+sed "s|__HOME__|$HOME|g" files/home/.local/share/applications/handy.desktop > ~/.local/share/applications/handy.desktop; update-desktop-database ~/.local/share/applications 2>/dev/null || true
+P=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/handy/
+cur=$(gsettings get org.gnome.settings-daemon.plugins.media-keys custom-keybindings); case "$cur" in *"$P"*) ;; "@as []"|"[]") gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['$P']";; *) gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "${cur%]}, '$P']";; esac
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$P name 'Handy: toggle dictation'
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$P command "env YDOTOOL_SOCKET=/tmp/.ydotool_socket $HOME/Applications/Handy.AppImage --toggle-transcription"
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$P binding '<Control><Super>h'
+
+say "internal microphone: t2bce_audio with the mic-capture fix (DKMS)"
+if [[ $IS_162 == 1 ]] && [[ "$KREL" == *t2* ]]; then
+  sudo rm -rf /usr/src/t2bce-audio-micfix-1.0; sudo cp -r files/usr/src/t2bce-audio-micfix-1.0 /usr/src/
+  sudo dkms add t2bce-audio-micfix/1.0 >/dev/null 2>&1 || true; sudo dkms build t2bce-audio-micfix/1.0 && sudo dkms install t2bce-audio-micfix/1.0 --force && sudo depmod -a
+  echo "takes effect at next boot (do NOT rmmod/insmod t2bce_audio alone: the T2 accepts only the first audio probe per boot)"
+else echo "skipped"; fi
+
+say "speakers: 16_2 DSP chain (FIR crossover/EQ + loudness + limiters), LADSPA edition for PipeWire 1.0"
+if [[ $IS_162 == 1 ]]; then
+  sudo install -d /usr/share/t2linux-audio/16_2; sudo install -m 0644 files/usr/share/t2linux-audio/16_2/* /usr/share/t2linux-audio/16_2/
+  install -D -m 0644 files/home/.config/pipewire/pipewire.conf.d/10-t2_162_speakers.conf ~/.config/pipewire/pipewire.conf.d/10-t2_162_speakers.conf
+  systemctl --user restart pipewire pipewire-pulse wireplumber; sleep 4
+  DSP=$(wpctl status | sed -n '/Sinks:/,/Sink endpoints/p' | grep "DSP Speakers" | grep -oE "[0-9]+\." | head -1 | tr -d .) || true
+  RAW=$(wpctl status | sed -n '/Sinks:/,/Sink endpoints/p' | grep "Apple Audio Device Speakers" | grep -oE "[0-9]+\." | head -1 | tr -d .) || true
+  [ -n "${DSP:-}" ] && { wpctl set-default "$DSP"; wpctl set-volume "$DSP" 0.7; [ -n "${RAW:-}" ] && wpctl set-volume "$RAW" 1.0; echo "default sink -> MacBook Pro T2 DSP Speakers (keep the raw sink at 100%, never select it)"; } || echo "DSP sink not visible yet (check journalctl --user -u pipewire)"
+else echo "skipped"; fi
+
+say "display: True-Tone-like white point + milder Night Light (config ~/.config/truetone.json)"
+install -D -m 0755 files/home/.local/bin/truetone.py ~/.local/bin/truetone.py
+[ -f ~/.config/truetone.json ] || install -D -m 0644 files/home/.config/truetone.json ~/.config/truetone.json
+install -D -m 0644 files/home/.config/systemd/user/truetone.service ~/.config/systemd/user/truetone.service
+systemctl --user daemon-reload; systemctl --user enable --now truetone.service
+
+say "done"
+cat <<'MSG'
+Next:
+  1. Log out and back in (libinput quirks + the scroll shim load with the session).
+  2. Reboot once for the microphone driver (DKMS) to be the first-loaded audio module.
+  3. Open Handy once, download the Parakeet V3 model (English+Italian, auto-detect); dictate with Ctrl+Super+H.
+  4. Speaker/Night Light tuning: /etc/libinput.conf (scroll-factor), ~/.config/truetone.json (night_temp, strength).
+Diagnostics for the trackpad live in tools/ (start.sh / report.sh).
+MSG

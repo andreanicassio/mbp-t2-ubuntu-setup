@@ -1,0 +1,10 @@
+[Desktop Entry]
+Categories=
+Comment=Handy
+Exec=env YDOTOOL_SOCKET=/tmp/.ydotool_socket __HOME__/Applications/Handy.AppImage %U
+StartupWMClass=handy
+Icon=handy
+Name=Handy
+Terminal=false
+Type=Application
+X-AppImage-Version=0.9.6
