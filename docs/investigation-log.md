@@ -89,3 +89,17 @@ night window applies a floor `night_temp` (3800 K = milder than GNOME's 2700 def
 Config: `~/.config/truetone.json` (re-read every 5 s, no restart needed). While it runs, GNOME's own Night Light
 slider/schedule are overridden (schedule forced 0-24, temperature written by the daemon).
 Disable: `systemctl --user disable --now truetone.service`, then `gsettings reset-recursively org.gnome.settings-daemon.plugins.color`.
+
+## 2026-09-11 — AirDrop via the firmware's AWDL engine (experimental)
+Wi-Fi is BCM4364 on brcmfmac; no monitor mode/injection, so OWL/OpenDrop are out. The Apple firmware
+(9.30.503.0.32.5.92, "roml") advertises `awdl` in its capability string and implements the whole AWDL engine
+(timing, channel hopping, sync-frame TX). Iovar names and payload sizes were taken from a decompile of the iOS 26
+AppleBCMWLAN DriverKit driver plus Broadcom's `wlioctl.h`/`bcmevent.h` from router GPL drops. Talking to the
+firmware from userspace works through brcmfmac's nl80211 vendor dcmd (`awdl/brcmiovar.py`). Findings:
+`awdl_if` makes the firmware add a role-7 bsscfg (stock brcmfmac ignores it: no netdev); the patch in
+`awdl/brcmfmac-awdl.patch` creates `awdl0` (iftype OCB) and forwards AWDL events (96-98, 111-120, action-frame
+TX/RX) as vendor events. Accepted payload formats and the enable sequence (sync params, channel sequence,
+`awdl_config`=115, `awdl`=1) are in `awdl/NOTES.md`. Result: firmware becomes AWDL master and sends PSF/MIF
+frames on its own. Not yet done: receiving from an Apple peer (none tested), peer table, data path, OpenDrop.
+Lesson: a full 16-slot channel sequence took the radio off the AP's channel and broke Wi-Fi (Ethernet needed);
+use the sparse Apple pattern and always run `awdl-down.sh` after tests.
