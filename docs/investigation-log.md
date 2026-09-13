@@ -4,8 +4,8 @@
 - `/etc/libinput/local-overrides.quirks` — measured thresholds for this pad (was: palm=800 on a scale where firm
   fingers hit 852; touch-down=150 on contacts that start at 42–124). Same lever the t2linux maintainer used in
   t2linux/T2-Ubuntu#178.
-- gsettings: `disable-while-typing=false` (the Touch Bar enumerates as a keyboard and emits real key events, which
-  mutes the trackpad); `tap-and-drag=true`, `tap-and-drag-lock=true` (drags without depending on the physical click).
+- gsettings: `disable-while-typing=true` (was `false`, blamed on the Touch Bar — wrong, see 2026-09-13 below);
+  `tap-and-drag=true`, `tap-and-drag-lock=true` (drags without depending on the physical click).
 - `/etc/udev/rules.d/99-t2-no-autosuspend.rules` — harmless; measured NOT to be this machine's problem.
 
 ## Measured, not fixed
@@ -103,3 +103,24 @@ TX/RX) as vendor events. Accepted payload formats and the enable sequence (sync 
 frames on its own. Not yet done: receiving from an Apple peer (none tested), peer table, data path, OpenDrop.
 Lesson: a full 16-slot channel sequence took the radio off the AP's channel and broke Wi-Fi (Ethernet needed);
 use the sparse Apple pattern and always run `awdl-down.sh` after tests.
+
+## 2026-09-13 — palm rejection while typing (disable-while-typing back on)
+Symptom: while typing, the heel of the hand brushes the (132 mm) pad -> stray clicks / cursor moves. That is exactly
+what libinput's disable-while-typing prevents (touches that *begin* within 200 ms of the first key / 500 ms of each
+following key are ignored; modifiers and Ctrl+key combos don't trigger it), and this setup had it off.
+Re-read libinput 1.25 (`evdev.c` `evdev_tag_keyboard`, `evdev-mt-touchpad.c` `tp_want_dwt`, `tp_key_ignore_for_dwt`):
+- The Touch Bar (05AC:8302, event8) cannot trip DWT: `evdev_tag_keyboard` returns before tagging any device that lacks
+  KEY_Q..KEY_P (it has 24 keys: Esc, F1-F12, brightness/volume/media), so it is never paired with the pad; and
+  `tp_key_ignore_for_dwt` drops KEY_ESC and everything >= KEY_F1 anyway. `libinput debug-events --verbose` confirms:
+  no `dwt activated` line for it. The original "Touch Bar mutes the pad" was a misattribution; the stuck pad was the
+  bcm5974 thresholds, already fixed by the quirk.
+- Toshy's xwaykeyz holds an EVIOCGRAB on the physical keyboard (event7 -> EBUSY), so mutter's libinput receives no
+  key events from it; DWT can only work through `XWayKeyz (virtual) Keyboard` (bus USB, 0001:0001). With no quirk
+  libinput leaves it untagged and `tp_want_dwt` never pairs it -> `[XWayKeyz Virtual Keyboard]
+  AttrKeyboardIntegration=internal` (was only in /etc, now in the repo). Verified: `palm: dwt activated with ...
+  <->XWayKeyz (virtual) Keyboard`.
+- `ydotoold virtual device` (BUS_VIRTUAL) stays unpaired on purpose: Handy's typed-out dictation must not mute the pad.
+- Edge palm zones are disabled by libinput itself for `ModelAppleTouchpad` ("hurts more than it helps"); size-based
+  palm detection (`AttrPalmSizeThreshold=2000`, TOUCH_MAJOR max 5000) is untouched — never measured a real palm here.
+Applied: `gsettings set org.gnome.desktop.peripherals.touchpad disable-while-typing true` (live, no re-login needed;
+the quirk was already loaded by this session).

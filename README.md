@@ -5,7 +5,8 @@ reproduced from a long debugging session (see `docs/investigation-log.md`). One 
 
 | Problem | Cause found | Fix in this repo |
 |---|---|---|
-| Trackpad "gets stuck" / insensitive | libinput applied old `bcm5974` thresholds (palm 800, touch-down 150) to a Magic-Trackpad-2-class device; the Touch Bar is a *keyboard* whose keys trip disable-while-typing | `files/etc/libinput/local-overrides.quirks` (thresholds measured on the hardware, jump-detection off), `disable-while-typing=false` |
+| Trackpad "gets stuck" / insensitive | libinput applied old `bcm5974` thresholds (palm 800, touch-down 150) to a Magic-Trackpad-2-class device | `files/etc/libinput/local-overrides.quirks` (thresholds measured on the hardware, jump-detection off) |
+| Accidental clicks / cursor jumps while typing (the pad is huge) | disable-while-typing had been switched off, wrongly blamed on the Touch Bar (it has no letter keys, so libinput never pairs it, and Esc/F-keys/media keys are exempt anyway). Also, Toshy grabs the physical keyboard, so libinput only sees its virtual keyboard, which is untagged (USB, vid 0001) and never paired | `disable-while-typing=true` + quirk `AttrKeyboardIntegration=internal` for `XWayKeyz (virtual) Keyboard` (same file); ydotool stays unpaired so dictation does not mute the pad |
 | Click-and-drag cuts out | the T2 releases the physical click when force drops below its own threshold | tap-and-drag + drag-lock |
 | Two-finger scroll too fast | GNOME 46 / libinput 1.25 have no scroll-factor setting | `libinput-config` preload shim, `/etc/libinput.conf` `scroll-factor=0.5` |
 | Touch Bar brightness flickers / never turns off | its dim/restore work items race; with `autodim=0` it never sleeps | `hid_appletb_kbd autodim=0` + `touchbar-follow-screen` user service: backlight follows mutter's PowerSaveMode and the lock screen (udev rule grants the `video` group write access) |
