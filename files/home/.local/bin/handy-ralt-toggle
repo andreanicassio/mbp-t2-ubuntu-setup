@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+"""Tap Right Option (Right Alt) alone -> toggle Handy dictation (SIGUSR2).
+
+Reads raw evdev events from every keyboard that has KEY_RIGHTALT. When Toshy
+is running it grabs the physical keyboard, so events arrive via its
+"XWayKeyz (virtual) Keyboard"; when Toshy is off they arrive from the physical
+keyboard. Nothing is grabbed or swallowed: holding Right Option with another
+key still types AltGr/Option characters (e.g. Option+3 = # on gb+mac).
+
+A "tap" = Right Alt pressed and released within TAP_MAX seconds with no other
+key or button pressed in between. No dependencies beyond the stdlib; the user
+must be in the `input` group.
+"""
+import os, select, signal, struct, subprocess, sys, time
+
+KEY_RIGHTALT = 100
+EV_KEY = 1
+TAP_MAX = 0.45          # seconds; longer holds are ignored
+DEBOUNCE = 0.30         # ignore a second trigger this soon after the last
+RESCAN_EVERY = 3.0      # seconds; picks up Toshy restarts and suspend/resume
+EVENT = struct.Struct("llHHi")  # struct input_event on 64-bit
+IGNORE = {"ydotoold virtual device"}  # Handy's own paste keystrokes
+if os.environ.get("HANDY_RALT_INCLUDE_YDOTOOL") == "1":  # for testing only
+    IGNORE = set()
+
+
+def log(*a):
+    print(*a, file=sys.stderr, flush=True)
+
+
+def keyboards():
+    """event node -> name, for devices whose KEY bitmap contains KEY_RIGHTALT."""
+    found = {}
+    try:
+        blocks = open("/proc/bus/input/devices").read().split("\n\n")
+    except OSError:
+        return found
+    for b in blocks:
+        name = node = keys = None
+        for line in b.splitlines():
+            if line.startswith("N: Name="):
+                name = line[8:].strip().strip('"')
+            elif line.startswith("H: Handlers="):
+                node = next((h for h in line[12:].split() if h.startswith("event")), None)
+            elif line.startswith("B: KEY="):
+                keys = line[7:].split()
+        if not (name and node and keys) or name in IGNORE:
+            continue
+        word, bit = divmod(KEY_RIGHTALT, 64)
+        if len(keys) > word and int(keys[-1 - word], 16) >> bit & 1:
+            found["/dev/input/" + node] = name
+    return found
+
+
+def toggle_handy():
+    r = subprocess.run(["pgrep", "-n", "-x", "handy"], capture_output=True, text=True)
+    pid = r.stdout.strip()
+    if not pid:
+        log("Right Option tap, but Handy is not running")
+        return
+    os.kill(int(pid), signal.SIGUSR2)
+    log(f"Right Option tap -> SIGUSR2 to handy ({pid})")
+
+
+def main():
+    fds = {}            # fd -> path
+    pressed_at = None   # time Right Alt went down, None if not armed
+    last_fire = 0.0
+    next_scan = 0.0
+    while True:
+        now = time.monotonic()
+        if now >= next_scan:
+            want = keyboards()
+            for fd, path in list(fds.items()):
+                if path not in want:
+                    os.close(fd); del fds[fd]
+            have = set(fds.values())
+            for path, name in want.items():
+                if path in have:
+                    continue
+                try:
+                    fds[os.open(path, os.O_RDONLY | os.O_NONBLOCK)] = path
+                    log(f"watching {path} ({name})")
+                except OSError as e:
+                    log(f"cannot open {path} ({name}): {e}")
+            next_scan = now + RESCAN_EVERY
+        ready, _, _ = select.select(list(fds), [], [], RESCAN_EVERY)
+        for fd in ready:
+            try:
+                data = os.read(fd, EVENT.size * 64)
+            except OSError:  # device vanished (suspend, Toshy restart)
+                os.close(fd); fds.pop(fd, None); next_scan = 0
+                continue
+            for off in range(0, len(data) - EVENT.size + 1, EVENT.size):
+                _, _, etype, code, value = EVENT.unpack_from(data, off)
+                if etype != EV_KEY or value == 2:   # ignore autorepeat
+                    continue
+                t = time.monotonic()
+                if code == KEY_RIGHTALT:
+                    if value == 1:
+                        pressed_at = t
+                    elif pressed_at is not None:
+                        if t - pressed_at <= TAP_MAX and t - last_fire >= DEBOUNCE:
+                            last_fire = t
+                            toggle_handy()
+                        pressed_at = None
+                elif value == 1:
+                    pressed_at = None   # used as a modifier: not a tap
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass

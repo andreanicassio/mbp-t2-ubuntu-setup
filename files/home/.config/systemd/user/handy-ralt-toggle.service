@@ -1,0 +1,11 @@
+[Unit]
+Description=Tap Right Option alone to toggle Handy dictation
+After=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/python3 %h/.local/bin/handy-ralt-toggle
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target
