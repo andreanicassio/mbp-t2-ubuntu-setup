@@ -63,8 +63,25 @@ sed "s|__HOME__|$HOME|g" files/home/.local/share/applications/handy.desktop > ~/
 P=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/handy/
 cur=$(gsettings get org.gnome.settings-daemon.plugins.media-keys custom-keybindings); case "$cur" in *"$P"*) ;; "@as []"|"[]") gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['$P']";; *) gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "${cur%]}, '$P']";; esac
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$P name 'Handy: toggle dictation'
-gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$P command "env YDOTOOL_SOCKET=/tmp/.ydotool_socket $HOME/Applications/Handy.AppImage --toggle-transcription"
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$P command 'pkill -USR2 -n -x handy'
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$P binding '<Control><Super>h'
+# start Handy hidden at login: both triggers only signal an already-running instance
+install -d ~/.config/autostart
+printf '[Desktop Entry]\nType=Application\nName=Handy\nExec=env YDOTOOL_SOCKET=/tmp/.ydotool_socket %s/Applications/Handy.AppImage --start-hidden\nIcon=handy\nX-GNOME-Autostart-enabled=true\nX-GNOME-Autostart-Delay=5\n' "$HOME" > ~/.config/autostart/handy.desktop
+# tap Right Option alone = start/stop dictation (held with another key it stays Option/AltGr)
+install -D -m 0755 files/home/.local/bin/handy-ralt-toggle ~/.local/bin/handy-ralt-toggle
+install -D -m 0644 files/home/.config/systemd/user/handy-ralt-toggle.service ~/.config/systemd/user/handy-ralt-toggle.service
+systemctl --user daemon-reload; systemctl --user enable --now handy-ralt-toggle.service || true
+# toggle (not push-to-talk); paste via clipboard + Shift+Insert, since `ydotool type` drops accented letters
+sudo apt-get install -y wl-clipboard >/dev/null
+S=~/.local/share/com.pais.handy/settings_store.json
+if [ -f "$S" ] && ! pgrep -x handy >/dev/null; then python3 - "$S" <<'PY'
+import json, sys
+p = sys.argv[1]; d = json.load(open(p)); s = d["settings"]
+s.update(push_to_talk=False, paste_method="shift_insert", typing_tool="ydotool")
+json.dump(d, open(p, "w"), indent=2)
+PY
+fi
 
 say "internal microphone: t2bce_audio with the mic-capture fix (DKMS)"
 if [[ $IS_162 == 1 ]] && [[ "$KREL" == *t2* ]]; then
@@ -128,7 +145,7 @@ cat <<'MSG'
 Next:
   1. Log out and back in (libinput quirks, the scroll shim, Toshy's input-group access and its GNOME extension all load with the session).
   2. Reboot once for the microphone driver (DKMS) to be the first-loaded audio module.
-  3. Open Handy once, download the Parakeet V3 model (English+Italian, auto-detect); dictate with Ctrl+Super+H.
+  3. Open Handy once, download the Parakeet V3 model (English+Italian, auto-detect); tap Right Option to start, tap again to stop (Ctrl+Super+H also works).
   4. Speaker/Night Light tuning: /etc/libinput.conf (scroll-factor), ~/.config/truetone.json (night_temp, strength).
 Diagnostics for the trackpad live in tools/ (start.sh / report.sh).
 MSG
