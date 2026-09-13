@@ -21,7 +21,7 @@ say "trackpad: libinput quirks (needs log out/in to take effect)"
 if [[ $IS_162 == 1 ]]; then sudo install -D -m 0644 files/etc/libinput/local-overrides.quirks /etc/libinput/local-overrides.quirks; sudo libinput quirks validate; else echo "skipped (product id in the quirk is 0x027E)"; fi
 
 say "trackpad/gnome settings"
-gsettings set org.gnome.desktop.peripherals.touchpad disable-while-typing false   # Touch Bar is a keyboard device; DWT mutes the pad
+gsettings set org.gnome.desktop.peripherals.touchpad disable-while-typing true    # palm rejection while typing; relies on the XWayKeyz quirk above (Toshy grabs the physical keyboard)
 gsettings set org.gnome.desktop.peripherals.touchpad tap-and-drag true
 gsettings set org.gnome.desktop.peripherals.touchpad tap-and-drag-lock true        # physical click drops at the T2's force threshold
 gsettings set org.gnome.settings-daemon.plugins.power idle-dim false

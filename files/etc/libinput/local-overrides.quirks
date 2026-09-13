@@ -28,3 +28,15 @@ AttrThumbSizeThreshold=1500
 # interval assumed), discarding the first frame of a flick -> "cursor sticks then moves".
 # Kernel-side stream measured clean (no real teleports) before enabling this.
 ModelLenovoX1Gen6Touchpad=1
+
+# Toshy (xwaykeyz) grabs the physical keyboard (EVIOCGRAB), so the compositor's libinput never sees its key
+# events: everything arrives from this uinput device (bus USB, vendor/product 0001:0001). Without an
+# integration hint libinput tags such a keyboard neither internal nor external and tp_want_dwt() refuses to
+# pair it with an internal touchpad, so disable-while-typing silently does nothing. Tag it internal.
+# (The Touch Bar needs nothing: it has no letter keys, so libinput never tags it as a keyboard at all, and
+# Esc/F-keys/media keys are exempt from DWT anyway. ydotool's device is left unpaired on purpose: dictation
+# output must not mute the pad.)
+[XWayKeyz Virtual Keyboard]
+MatchUdevType=keyboard
+MatchName=*(virtual) Keyboard
+AttrKeyboardIntegration=internal
